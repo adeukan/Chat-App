@@ -1,0 +1,164 @@
+<!DOCTYPE html>
+<html>
+
+	<head>
+		<title id="title">Chat</title>
+		<meta charset="utf-8">
+		<!-- add the styles -->
+		<link rel="stylesheet" href="styles.css">
+	</head>
+
+	<body>
+		<div id="container">
+
+			<!-- div for displaying the names of all active clients -->
+			<div id="header">
+				<h3 id="title">Users online:</h3>
+				<h5 id="current_client"></h5>
+				<h5 id="clients"></h5>
+			</div>
+			<!-- div to display all the messages -->
+			<div id="board"></div>
+			<footer>
+				<!-- textarea to input the client login name -->
+				<textarea id="input_login" type="text" placeholder="Enter your login here"></textarea>
+				<!-- login button -->
+				<button id="login_button" onclick="login()">LOGIN</button>
+				<!-- color picker -->
+				<input type="color" id="color" value="#ffffff">
+				<!-- textarea to input the messages -->
+				<textarea id="input_message" type="text" hidden></textarea>
+				<!-- send button -->
+				<button id="send_button" onclick="send()" hidden>SEND</button>
+			</footer>
+		</div>
+
+		<!-- add the socket.io library -->
+		<script src="/socket.io/socket.io.js"></script>
+
+		<!-- SCRIPT -->
+		<script>
+
+			// connection channel for the client
+			var channel;
+
+			// login button click handler. The chat will be started if the login was successful
+			function login() {
+
+				// get the login name entered in the login textarea
+				var login = document.getElementById("input_login").value;
+
+				// request a connection from the server
+				if(login != "")
+					channel = io.connect();
+				
+				// when the connection is established ---------------------------------------------------
+				channel.on('connect', function() {
+
+					// get the color from the color picker
+					var color = document.getElementById('color').value;
+
+					// send the client login name and color to the server
+					channel.emit('login', {login:login, color:color});
+
+					// receive login name validation result from the server (true or false)
+					channel.on('loginValidation', function(validationResult) {
+
+						// if the chosen login name is OK
+						if(validationResult) {
+
+							// display the client login name on the top of the screen at the first position
+							document.getElementById("current_client").innerHTML = login + ",";
+							// use the color chosen by the client
+							document.getElementById("current_client").style.color = color;
+							// hide the login tools (textarea, button, and color picker)
+							document.getElementById("color").style.display = 'none';
+							document.getElementById("input_login").style.display = 'none';
+							document.getElementById("login_button").style.display = 'none';
+							// add the "send message" tools (textarea and button)
+							document.getElementById("input_message").style.display = 'inline';
+							document.getElementById("send_button").style.display = 'inline-block';
+						}
+						else
+							window.alert("Sorry, this name is already in use");})
+				});
+
+
+				// when client gets the object with all clients ---------------------------------------------
+				channel.on('clients', function(clients) {
+
+					// clear all client names in the header
+					document.getElementById("clients").innerHTML = "";
+					// delete current client from the object to avoid duplicates in the header
+					delete clients[channel.id];
+
+					// get an array of the object keys
+					// used to loop through the "clients" object fields (each field represents an active client)
+					var keys = Object.keys(clients);
+
+					// go through all the keys in a loop (all clients)
+					for (var i = 0; i < keys.length; i++) {
+
+						// create span element for a client login name
+						var clientName = document.createElement("span");
+						// get the login name of a client
+						var textnode = document.createTextNode(clients[keys[i]].login);
+						// append the client login name to the span element
+						clientName.appendChild(textnode);
+						// set the color
+						clientName.style.color = clients[keys[i]].color;
+						// add the span element with the client name to the screen
+						document.getElementById("clients").appendChild(clientName);
+						
+						// add a comma if needed
+						if (i != keys.length - 1) {
+							var comma = document.createElement("span");
+							textnode = document.createTextNode(", ");
+							comma.appendChild(textnode);
+							document.getElementById("clients").appendChild(comma);
+						}
+					}
+				});
+
+				// client receives the array with all messages --------------------------------------------------
+				// each member of this array represents one message with "login", "color" and "message" fields
+				channel.on('allMessages', function(allMessages) {
+
+					// clear the screen
+					document.getElementById("board").innerHTML = "";
+
+					// loop through all the messages and add each message as a separate span element
+					for (var i = 0; i < allMessages.length; i++) {
+						// create span element
+						var clientSpan = document.createElement("span");
+						// add the "message" class to span element (display:block style will be used for this)
+						clientSpan.classList.add('message');
+						// create Text Node element with client name and message
+						var textnode = document.createTextNode(allMessages[i].login + ": " + allMessages[i].message);
+						// add Text Node to the span element
+						clientSpan.appendChild(textnode);
+						// set the color
+						clientSpan.style.color = allMessages[i].color;
+						// add the span element with the message to the screen
+						document.getElementById("board").appendChild(clientSpan);
+					};
+				});
+			}
+
+			// when client clicks "SEND" button -----------------------------------------------------------
+			function send() {
+
+				// get the message from the textarea
+				var message = document.getElementById("input_message").value;
+
+				if(message != "") {
+					// clear the textarea
+					document.getElementById("input_message").value = "";
+					// send message to the server
+					channel.emit('message', message);
+				}
+			}
+		</script>
+	</body>
+</html>
+
